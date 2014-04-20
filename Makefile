@@ -13,5 +13,8 @@ env: virtual-env
 run: env
 	$(ENV)/bin/python dental_flask_app/dental_flask_app.py
 
+run-tests: env
+	$(ENV)/bin/nosetests ./tagsana/ -vs --with-coverage --cover-package=tagsana.tagsana
+
 clean:
 	rm -rf $(ENV)
