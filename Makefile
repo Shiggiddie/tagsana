@@ -4,6 +4,9 @@ ENV = $(CURDIR)/env
 virtual-env:
 	virtualenv --python=$(PYTHON) $(ENV)
 
+test-env: virtual-env
+	$(ENV)/bin/pip install -r requirements/test.txt
+
 env: virtual-env
 	$(ENV)/bin/pip install -r requirements/base.txt
 

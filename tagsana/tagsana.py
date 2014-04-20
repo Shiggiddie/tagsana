@@ -31,18 +31,23 @@ class Tagsana(object):
             wss = self.api.list_workspaces()
         tasks = []
         for ws in wss:
-            if users:
+            if users and not projs:
+                #Get all tasks for a user under wss
                 if not isinstance(users, list):
                     users = [users]
                 for user in users:
                     tasks += self.api.list_tasks(ws['id'], user)
-            if projs:
-                if not isinstance(projs, list):
-                    projs = [projs]
+            elif users and projs:
+                #TODO: Case where want to know user activity across spec projs
+                pass
             else:
-                projs = self.api.list_projects(ws['id'])
-            for proj in projs:
-                tasks += self.api.get_project_tasks(proj['id'])
+                #No user defined, find projs
+                if projs is not None and not isinstance(projs, list):
+                    projs = [projs]
+                else:
+                    projs = self.api.list_projects(ws['id'])
+                for proj in projs:
+                    tasks += self.api.get_project_tasks(proj['id'])
 
         tasks = self.currate_tasks(tasks)
 
