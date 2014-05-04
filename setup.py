@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from asana import __version__ as version
+from tagsana import __version__ as version
 
 install_requires = []
 try:
