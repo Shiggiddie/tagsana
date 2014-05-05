@@ -9,10 +9,14 @@ except ImportError:
 
 name = "tagsana"
 
+with open('README.md') as fh:
+    long_description = fh.read()
+
 setup(
     name = name, version = version, author = "Sean Dennison",
     author_email = "sean.dennison.osu@gmail.com",
     description = "Visualizer for Asana task tags",
+    long_description = long_description,
     license = "Apache License, (2.0)",
     keywords = "tagsana",
     url = "https://github.com/Shiggiddie/tagsana",

@@ -9,6 +9,8 @@ install:
   - pip install nose
   - pip install mock
   - pip install coverage
+  - pip install Flask
+  - pip install requests
 
 script:
   - nosetests ./tagsana/ -vs --with-coverage --cover-package=tagsana.tagsana
