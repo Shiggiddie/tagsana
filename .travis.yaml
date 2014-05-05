@@ -1,0 +1,14 @@
+language: python
+
+python:
+  - 2.7
+  - 3.4
+  - pypy
+
+install:
+  - pip install nose
+  - pip install mock
+  - pip install coverage
+
+script:
+  - nosetests ./tagsana/ -vs --with-coverage --cover-package=tagsana.tagsana
