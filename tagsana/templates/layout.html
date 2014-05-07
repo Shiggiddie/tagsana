@@ -1,0 +1,14 @@
+<!doctype html>
+<title>Tagsana</title>
+<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
+<div class=page>
+  {% if entry_type != "Workspace" %}
+  <div align="right">
+    <form action="{{ url_for('show_workspaces') }}" method=get>
+      <input type=submit value="Go Back to Workspaces">
+    </form>
+  </div>
+  {% endif %}
+  <h1>Tagsana</h1>
+  {% block body %}{% endblock %}
+</div>

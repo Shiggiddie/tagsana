@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block body %}
+<h1>Workspaces:</h1>
+  <ul class=entries>
+  {% for ws in wss %}
+    <li><h2>{{ ws.id }}</h2>{{ ws.name|safe }}
+    <form action="{{ url_for('get_tags') }}" method=post>
+        <input type=hidden name="workspace" value={{ ws.id }}>
+        <input type=submit value="Get Tags">
+    </form>
+    <form action="{{ url_for('get_tasks') }}" method=post>
+        <input type=hidden name="workspace" value={{ ws.id }}>
+        <input type=submit value="Get Tasks">
+    </form>
+    <form action="{{ url_for('get_projects') }}" method=post>
+        <input type=hidden name="workspace" value={{ ws.id }}>
+        <input type=submit value="Get Projects">
+    </form>
+  {% else %}
+    <li><em>Unbelievable.  No entries here so far</em>
+  {% endfor %}
+  </ul>
+{% endblock %}

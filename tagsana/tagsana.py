@@ -53,7 +53,10 @@ class Tagsana(object):
 
         count = defaultdict(int)
         for task in tasks:
-            for tag in self.api.get_task_tags(task['id']):
-                count[tag['name']] += 1
+            try:
+                for tag in self.api.get_task_tags(task['id']):
+                    count[tag['name']] += 1
+            except:
+                pass
         return count
 

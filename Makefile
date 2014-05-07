@@ -11,7 +11,7 @@ env: virtual-env
 	$(ENV)/bin/pip install -r requirements/base.txt
 
 run: env
-	$(ENV)/bin/python dental_flask_app/dental_flask_app.py
+	$(ENV)/bin/python tagsana/app_tagsana.py
 
 run-tests: test-env
 	$(ENV)/bin/nosetests ./tagsana/ -vs --with-coverage --cover-package=tagsana.tagsana

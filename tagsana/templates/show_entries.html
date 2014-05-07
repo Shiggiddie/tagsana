@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<h2>{{ entry_type }}{% if entries|length > 1 %}s{% endif %}{% if context %} found{% if context|length > 1 %}:
+  <ul>{% endif %}
+  {% for c in context %}
+    {% if context|length > 1 %}<li>{% endif %}{{ c.prep}} {{ c.type }}: {{ c.name }}{% endfor %}{% endif %}</h2>
+  <h4>A total of <b>{{ entries|length }}</b> {{ entry_type}}{% if entries|length > 1 %}s{% endif %} found</h4>
+  <ul class=entries>
+  {% for entry in entries %}
+    <li><h2>{{ entry.id }}</h2>{{ entry.name|safe }}
+   {% if entry_type != "Tag" %}
+    <form action="{{ url_for('get_tags') }}" method=post>
+        <input type=hidden name={{ entry_type }} value={{ entry.id }}>
+        <input type=submit value="Get Tags">
+    </form>
+   {% endif %}
+   {% if entry_type != "Task" %}
+    <form action="{{ url_for('get_tasks') }}" method=post>
+        <input type=hidden name={{ entry_type }} value={{ entry.id }}>
+        <input type=submit value="Get Tasks">
+    </form>
+   {% endif %}
+   {% if entry_type != "Project" %}
+    <form action="{{ url_for('get_projects') }}" method=post>
+        <input type=hidden name={{ entry_type }} value={{ entry.id }}>
+        <input type=submit value="Get Projects"> {% if entry_type == "Tag" %}Warning! This can take a long time!{% endif %}
+    </form>
+   {% endif %}
+  {% else %}
+    <li><em>No entries found</em>
+  {% endfor %}
+  </ul>
+{% endblock %}
