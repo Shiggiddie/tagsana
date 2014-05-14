@@ -169,6 +169,7 @@ def show_tags():
     if ct:
         ct['name'] = ct_cur.fetchone()['name']
         ct['prep'] = 'in' if is_subset('tag', ct['type']) else 'for'
+        context.append(ct)
     entries = cur.fetchall()
     return render_template('show_entries.html', entries=entries, entry_type='Tag', context=context)
 
@@ -412,27 +413,101 @@ def show_by_query_string():
     else:
         qt = query['show']
         sql_select = """SELECT %s.id, %s.name FROM %s""" % (qt, qt, qt)
-    for t in json.loads(query.get('table_filters',{})).keys():
-        if where_used:
-            ands += ' AND'
-        else:
-            ands += ' WHERE'
-            where_used = True
-        tables += ', %s' % (t,)
-        id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[t]])
-        if is_subset(qt, t):
-            tables += ', %s_%s' % (t, qt)
-            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-                      qt,      t,qt,qt,        t,qt, t,      t,        t,  id_list)
-        else:
-            tables += ', %s_%s' % (qt, t)
-            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-                      qt,     qt, t,qt,       qt, t, t,      t,        t,  id_list)
+    print 'tables: %s' % tables
+    for delim in json.loads(query.get('table_filters',{})).keys():
+        print 'tables in delim loop: %s' % tables
+        print 'delims: %s' % json.loads(query.get('table_filters',{})).keys()
+        print "query: %s" % query
+        print "delim: %s" % delim
+        print "json.loads(query['table_filters']: %s" % query['table_filters']
+        print "json.loads(query['table_filters'])[delim]: %s" % json.loads(query['table_filters'])[delim]
+        for t in json.loads(query['table_filters'])[delim].keys():
+            print 'tables in tag loop: %s' % tables
+            ct = {}
+            if where_used:
+                ands += ' AND'
+            else:
+                ands += ' WHERE'
+                where_used = True
+            tables += ', %s' % (t,)
+            id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
+            id_len = [str(eid) for eid in json.loads(query['table_filters'])[delim][t]]
+            if is_subset(qt, t):
+                dt, st = t, qt
+            else:
+                dt, st = qt, t
+
+            tables += ', %s_%s' % (dt, st)
+            if delim == 'has_any':
+                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list)
+            elif delim == 'has_all':
+                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) >= %s' % (
+                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
+            elif delim == 'has_only':
+                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) = %s' % (
+                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
+            else:
+                print 'ERROR: delimiter not "has_any"/"has_all"/"has_only"'
+
+            ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
+            ct['type'] = t
+            ct['prep'] = 'in' if is_subset(qt, t) else 'for'
+            count = 0
+            boo = ''
+            for row in ct_cur.fetchall():
+                context.append({'type':t,'prep':'in' if is_subset(qt, t) else 'with','name':row['name']})
+        #ct = {}
+        #if where_used:
+        #    ands += ' AND'
+        #else:
+        #    ands += ' WHERE'
+        #    where_used = True
+        #tables += ', %s' % (t,)
+        #id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
+        #if is_subset(qt, t):
+        #    tables += ', %s_%s' % (t, qt)
+        #    ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+        #              qt,      t,qt,qt,        t,qt, t,      t,        t,  id_list)
+        #else:
+        #    tables += ', %s_%s' % (qt, t)
+        #    ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+        #              qt,     qt, t,qt,       qt, t, t,      t,        t,  id_list)
+        #ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
+        #ct['type'] = t
+        #ct['prep'] = 'in' if is_subset(qt, t) else 'for'
+        #for row in ct_cur.fetchall():
+        #    ct['name'] = row['name']
+        #    context.append(ct)
+        #for t in json.loads(query.get('table_filters',{})).keys():
+        #    ct = {}
+        #    if where_used:
+        #        ands += ' AND'
+        #    else:
+        #        ands += ' WHERE'
+        #        where_used = True
+        #    tables += ', %s' % (t,)
+        #    id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[t]])
+        #    if is_subset(qt, t):
+        #        tables += ', %s_%s' % (t, qt)
+        #        ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+        #                qt,      t,qt,qt,        t,qt, t,      t,        t,  id_list)
+        #    else:
+        #        tables += ', %s_%s' % (qt, t)
+        #        ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+        #                qt,     qt, t,qt,       qt, t, t,      t,        t,  id_list)
+        #    ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
+        #    ct['type'] = t
+        #    ct['prep'] = 'in' if is_subset(qt, t) else 'for'
+        #    for row in ct_cur.fetchall():
+        #        ct['name'] = row['name']
+        #        context.append(ct)
 
     sql_query = sql_select + tables + ands
     print 'About to Query: %s' % sql_query
     cur = db.execute(sql_query)
     entries = cur.fetchall()
+    print 'Context is currently: %s' % context
     return render_template('show_entries.html', entries=entries, entry_type=qt.capitalize(), context=context)
 
 @app.route('/workspaces')
