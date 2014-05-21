@@ -400,63 +400,129 @@ def show_projects():
 @app.route('/query/')
 def show_by_query_string():
     db = get_db()
-    context = []
-    ct = {}
-    where_used = False
-    tables = ''
-    ands = ''
-    valid_args = ['show','table_filters']
-    request_args = request.args
-    query = {key: request_args[key] for key in request_args.keys() if key in valid_args}
-    if 'show' not in query.keys():
-        print 'ERROR: must have a "show" query string parameter'
-    else:
-        qt = query['show']
-        sql_select = """SELECT %s.id, %s.name FROM %s""" % (qt, qt, qt)
-    print 'tables: %s' % tables
-    for delim in json.loads(query.get('table_filters',{})).keys():
-        print 'tables in delim loop: %s' % tables
-        print 'delims: %s' % json.loads(query.get('table_filters',{})).keys()
-        print "query: %s" % query
-        print "delim: %s" % delim
-        print "json.loads(query['table_filters']: %s" % query['table_filters']
-        print "json.loads(query['table_filters'])[delim]: %s" % json.loads(query['table_filters'])[delim]
-        for t in json.loads(query['table_filters'])[delim].keys():
-            print 'tables in tag loop: %s' % tables
-            ct = {}
-            if where_used:
-                ands += ' AND'
-            else:
-                ands += ' WHERE'
-                where_used = True
-            tables += ', %s' % (t,)
-            id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
-            id_len = [str(eid) for eid in json.loads(query['table_filters'])[delim][t]]
-            if is_subset(qt, t):
-                dt, st = t, qt
-            else:
-                dt, st = qt, t
 
-            tables += ', %s_%s' % (dt, st)
-            if delim == 'has_any':
-                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list)
-            elif delim == 'has_all':
-                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) >= %s' % (
-                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
-            elif delim == 'has_only':
-                ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) = %s' % (
-                          qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
-            else:
-                print 'ERROR: delimiter not "has_any"/"has_all"/"has_only"'
+    def create_sql_srq(srq, rt):
+        #Determine the table to be queried
+        qt = srq.pop('qt')
 
-            ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
-            ct['type'] = t
-            ct['prep'] = 'in' if is_subset(qt, t) else 'for'
-            count = 0
-            boo = ''
-            for row in ct_cur.fetchall():
-                context.append({'type':t,'prep':'in' if is_subset(qt, t) else 'with','name':row['name']})
+        #Determine the query type
+        qtype = srq.keys()[0]
+
+        #Grab the ids to be queried
+        ids = ', '.join([str(v) for v in srq[qtype]])
+
+        #Construct the relationship table
+        if is_subset(rt, qt):
+            relt = '%s_%s' % (qt, rt)
+        else:
+            relt = '%s_%s' % (rt, qt)
+
+        _base = 'SELECT %s_id FROM %s WHERE %s_id IN (%s)' % (rt, relt, qt, ids)
+
+        if any(qtype == q for q in ['only','all']):
+            _all = ' GROUP BY %s_id HAVING count(%s_id) == %s' % (rt, rt, len(srq[qtype]))
+        else:
+            _all = ''
+
+        if qtype == 'only':
+            _s_only = 'SELECT %s_id FROM %s WHERE %s_id IN (' % (rt, relt, rt)
+            _e_only = ') GROUP BY %s_id HAVING count(%s_id) == %s' % (rt, qt, len(srq[qtype]))
+        else:
+            _s_only = ''
+            _e_only = ''
+
+        return _s_only + _base + _all + _e_only
+
+    def create_sql_srqs(srqs, rt):
+        sql_srqs = []
+        for srq in srqs:
+            sql_srqs.append(create_sql_srq(srq, rt))
+        return sql_srqs
+
+    def create_sql_crqs(crq_type, sql_srqs, rt, sql_crqs):
+        if crq_type == 'or':
+            s_crq = ' UNION ALL '
+            e_crq = ''
+        else:
+            s_crq = ' AND %s_id IN(' % rt
+            e_crq = ')'
+
+        for sql_srq in sql_srqs:
+            if sql_crqs:
+                sql_crqs += s_crq + sql_srq + e_crq
+            else:
+                sql_crqs += sql_srq
+
+        return sql_crqs
+
+    query = json.loads(request.args.get('query'))
+    rtvs = query.pop('rt')
+    rt = rtvs.keys()[0]
+    cols = ', '.join(rtvs[rt])
+    query_start = 'SELECT %s FROM %s WHERE id IN(' % (cols, rt)
+    sql_crqs = ''
+    for crq_type, srqs in query.iteritems():
+        sql_srqs = create_sql_srqs(srqs, rt)
+        sql_crqs = create_sql_crqs(crq_type, sql_srqs, rt, sql_crqs)
+    sql_query = query_start + sql_crqs + ');'
+
+    #context = []
+    #ct = {}
+    #where_used = False
+    #tables = ''
+    #ands = ''
+    #valid_args = ['show','table_filters']
+    #request_args = request.args
+    #query = {key: request_args[key] for key in request_args.keys() if key in valid_args}
+    #if 'show' not in query.keys():
+    #    print 'ERROR: must have a "show" query string parameter'
+    #else:
+    #    qt = query['show']
+    #    sql_select = """SELECT %s.id, %s.name FROM %s""" % (qt, qt, qt)
+    #print 'tables: %s' % tables
+    #for delim in json.loads(query.get('table_filters',{})).keys():
+    #    print 'tables in delim loop: %s' % tables
+    #    print 'delims: %s' % json.loads(query.get('table_filters',{})).keys()
+    #    print "query: %s" % query
+    #    print "delim: %s" % delim
+    #    print "json.loads(query['table_filters']: %s" % query['table_filters']
+    #    print "json.loads(query['table_filters'])[delim]: %s" % json.loads(query['table_filters'])[delim]
+    #    for t in json.loads(query['table_filters'])[delim].keys():
+    #        print 'tables in tag loop: %s' % tables
+    #        ct = {}
+    #        if where_used:
+    #            ands += ' AND'
+    #        else:
+    #            ands += ' WHERE'
+    #            where_used = True
+    #        tables += ', %s' % (t,)
+    #        id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
+    #        id_len = [str(eid) for eid in json.loads(query['table_filters'])[delim][t]]
+    #        if is_subset(qt, t):
+    #            dt, st = t, qt
+    #        else:
+    #            dt, st = qt, t
+
+    #        tables += ', %s_%s' % (dt, st)
+    #        if delim == 'has_any':
+    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
+    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list)
+    #        elif delim == 'has_all':
+    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) >= %s' % (
+    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
+    #        elif delim == 'has_only':
+    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) = %s' % (
+    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
+    #        else:
+    #            print 'ERROR: delimiter not "has_any"/"has_all"/"has_only"'
+
+    #        ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
+    #        ct['type'] = t
+    #        ct['prep'] = 'in' if is_subset(qt, t) else 'for'
+    #        count = 0
+    #        boo = ''
+    #        for row in ct_cur.fetchall():
+    #            context.append({'type':t,'prep':'in' if is_subset(qt, t) else 'with','name':row['name']})
         #ct = {}
         #if where_used:
         #    ands += ' AND'
@@ -503,11 +569,12 @@ def show_by_query_string():
         #        ct['name'] = row['name']
         #        context.append(ct)
 
-    sql_query = sql_select + tables + ands
+    #sql_query = sql_select + tables + ands
     print 'About to Query: %s' % sql_query
     cur = db.execute(sql_query)
     entries = cur.fetchall()
-    print 'Context is currently: %s' % context
+    #print 'Context is currently: %s' % context
+    return render_template('show_entries.html', entries=entries, entry_type=rt.capitalize())
     return render_template('show_entries.html', entries=entries, entry_type=qt.capitalize(), context=context)
 
 @app.route('/workspaces')
@@ -519,4 +586,4 @@ def show_workspaces():
 
 if __name__ == '__main__':
     tagsana = Tagsana()
-    app.run()
+    app.run(host='0.0.0.0')
