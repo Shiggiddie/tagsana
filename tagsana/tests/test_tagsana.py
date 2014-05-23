@@ -59,4 +59,3 @@ class TestTagsana(object):
         expected = defaultdict(int)
         result = tagsana.get_count(projs={'id':1234})
         eq_(expected, result)
-

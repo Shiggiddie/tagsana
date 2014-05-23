@@ -10,6 +10,7 @@ from tagsana import Tagsana
 
 app = Flask(__name__)
 app.config.from_object(__name__)
+tagsana = Tagsana()
 
 app.config.update(dict(
     DATABASE=os.path.join(app.root_path, 'app_tagsana.db'),
@@ -74,33 +75,31 @@ def get_tags():
     workspace_id = project_id  = task_id = None
     try:
         workspace_id = int(request.form['Workspace'])
+    except:
+        pass
+    else:
         print 'Calling "get_tags" API for workspace: %s...' % (workspace_id,)
         session['workspace_id'] = workspace_id
-    except:
-        pass
+        tags = tagsana.api.get_tags(workspace_id)
     try:
         project_id = int(request.form['Project'])
+    except:
+        pass
+    else:
         print 'Calling "get_tags" API for project: %s...' % (project_id,)
         session['project_id'] = project_id
-    except:
-        pass
-    try:
-        task_id = int(request.form['Task'])
-        print 'Calling "get_tags" API for task: %s...' % (task_id,)
-        session['task_id'] = task_id
-    except:
-        pass
-    if workspace_id:
-        tags = tagsana.api.get_tags(workspace_id)
-    elif project_id:
         tags = [l for el in [tagsana.api.get_task_tags(t['id'])
                   for t in tagsana.api.get_project_tasks(project_id)]
                   for l in chain(el)]
         print 'API call returned tags: %s' % (tags,)
-    elif task_id:
-        tags = tagsana.api.get_task_tags(task_id)
-    else:
+    try:
+        task_id = int(request.form['Task'])
+    except:
         AssertionError('No context for searching for tags given!')
+    else:
+        print 'Calling "get_tags" API for task: %s...' % (task_id,)
+        session['task_id'] = task_id
+        tags = tagsana.api.get_task_tags(task_id)
     print 'API call returned tags: %s' % (tags,)
     for tag in tags:
         try:
@@ -284,30 +283,36 @@ def show_tasks():
 def get_projects():
     db = get_db()
     workspace_id = task_id = tag_id = None
+
+    #Workflow for discovering projects when workspace is known
     try:
         workspace_id = int(request.form['Workspace'])
+    except:
+        pass
+    else:
         print 'Calling "list_projects" API for workspace: %s...' % (workspace_id,)
         session['workspace_id'] = workspace_id
-    except:
-        pass
+        print 'Calling "get_project_tasks" API for projects: %s...' % (projects,)
+        projects = tagsana.api.list_projects(workspace_id)
+
+    #Workflow for discovering projects when task is known
     try:
         task_id = int(request.form['Task'])
+    except:
+        pass
+    else:
         print 'Calling "get_task" API for task: %s...' % (task_id,)
         session['task_id'] = task_id
-    except:
-        pass
+        projects = tagsana.api.get_task(task_id)['projects']
+
+    #Workflow for discovering projects when tag is known
     try:
         tag_id = int(request.form['Tag'])
+    except:
+        AssertionError('No context for searching for projects given!')
+    else:
         print 'Calling "get_tag_tasks" API for tag: %s...' % (tag_id,)
         session['tag_id'] = tag_id
-    except:
-        pass
-    if workspace_id:
-        projects = tagsana.api.list_projects(workspace_id)
-        print 'Calling "get_project_tasks" API for projects: %s...' % (projects,)
-    elif task_id:
-        projects = tagsana.api.get_task(task_id)['projects']
-    elif tag_id:
         projects = []
         workspace_ids = [ws['id'] for ws in tagsana.api.list_workspaces()]
         projs = [p for el in [tagsana.api.list_projects(w) for w in workspace_ids] for p in chain(el)]
@@ -319,8 +324,8 @@ def get_projects():
                     print 'FOUND A TAG THAT MATCHED tag_id!'
                     projects.append(proj)
                     break
-    else:
-        print 'No context for searching for tags given!'
+
+    #Now that projects have been discovered, add them to the DB
     print 'API call returned projects: %s' % (projects,)
     for project in projects:
         try:
@@ -585,5 +590,4 @@ def show_workspaces():
     return render_template('show_entries.html', entries=entries, entry_type='Workspace')
 
 if __name__ == '__main__':
-    tagsana = Tagsana()
     app.run(host='0.0.0.0')
