@@ -13,7 +13,8 @@ env: virtual-env
 run: env
 	$(ENV)/bin/python tagsana/app_tagsana.py
 
-run-tests: test-env
+tests: test-env
+	$(ENV)/bin/coverage erase
 	$(ENV)/bin/nosetests ./tagsana/ -vs --with-coverage --cover-package=tagsana.tagsana,tagsana.app_tagsana
 
 clean:
