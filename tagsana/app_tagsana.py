@@ -59,14 +59,9 @@ def main():
     wss = tagsana.api.list_workspaces()
     db = get_db()
     for ws in wss:
-        try:
-            db.execute('INSERT OR REPLACE INTO workspace (id, name) VALUES (?, ?)',
+        db.execute('INSERT OR REPLACE INTO workspace (id, name) VALUES (?, ?)',
                         [ws['id'], ws['name']])
-        except sqlite3.IntegrityError:
-            #Workspace already in DB
-            pass
-        else:
-            db.commit()
+        db.commit()
     return redirect(url_for('show_workspaces'))
 
 @app.route('/add_tags', methods=['POST'])
@@ -102,33 +97,20 @@ def get_tags():
         tags = tagsana.api.get_task_tags(task_id)
     print 'API call returned tags: %s' % (tags,)
     for tag in tags:
-        try:
-            db.execute('INSERT OR REPLACE INTO tag (id, name) VALUES (?, ?)',
-                        [tag['id'], tag['name']])
-            print 'addition of tag: %s SUCCESSFUL' % tag
-        except sqlite3.IntegrityError:
-            #Tag already in DB
-            print 'tag: %s ALREADY IN DB' % tag
-            pass
+        db.execute('INSERT OR REPLACE INTO tag (id, name) VALUES (?, ?)',
+                    [tag['id'], tag['name']])
+        db.commit()
+        if workspace_id:
+            db.execute('INSERT OR REPLACE INTO workspace_tag (workspace_id, tag_id) VALUES (?, ?)',
+                        [workspace_id, tag['id']])
+        elif project_id:
+            db.execute('INSERT OR REPLACE INTO project_tag (project_id, tag_id) VALUES (?, ?)',
+                        [project_id, tag['id']])
         else:
-            db.commit()
-        try:
-            if workspace_id:
-                db.execute('INSERT OR REPLACE INTO workspace_tag (workspace_id, tag_id) VALUES (?, ?)',
-                            [workspace_id, tag['id']])
-            elif project_id:
-                db.execute('INSERT OR REPLACE INTO project_tag (project_id, tag_id) VALUES (?, ?)',
-                            [project_id, tag['id']])
-            else:
-                db.execute('INSERT OR REPLACE INTO task_tag (task_id, tag_id) VALUES (?, ?)',
-                            [task_id, tag['id']])
-            print 'addition of tag relationship: %s SUCCESSFUL' % tag
-        except sqlite3.IntegrityError:
-            #Tag already in DB
-            print 'tag relationship: %s ALREADY IN DB' % tag
-            pass
-        else:
-            db.commit()
+            db.execute('INSERT OR REPLACE INTO task_tag (task_id, tag_id) VALUES (?, ?)',
+                        [task_id, tag['id']])
+        print 'addition of tag relationship: %s SUCCESSFUL' % tag
+        db.commit()
     return redirect(url_for('show_tags'))
 
 @app.route('/tags')
@@ -178,64 +160,50 @@ def get_tasks():
     workspace_id = project_id  = tag_id = None
     try:
         workspace_id = int(request.form['Workspace'])
-        print 'Calling "get_project_tasks" API for workspace: %s...' % (workspace_id,)
+    except:
+        pass
+    else:
         session['workspace_id'] = workspace_id
-    except:
-        pass
-    try:
-        project_id = int(request.form['Project'])
-        print 'Calling "get_project_tasks" API for project: %s...' % (project_id,)
-        session['project_id'] = project_id
-    except:
-        pass
-    try:
-        tag_id = int(request.form['Tag'])
-        print 'Calling "get_tag_tasks" API for tag: %s...' % (tag_id,)
-        session['tag_id'] = tag_id
-    except:
-        pass
-    if workspace_id:
+        print 'Calling "get_project_tasks" API for workspace: %s...' % (workspace_id,)
         projects = tagsana.api.list_projects(workspace_id)
         print 'Calling "get_project_tasks" API for projects: %s...' % (projects,)
         tasks = [l for el in [tagsana.api.get_project_tasks(p) 
                                 for proj in projects 
                                 for k, p in proj.iteritems() 
                                 if k == 'id'] for l in chain(el)]
-    elif project_id:
-        tasks = tagsana.api.get_project_tasks(project_id)
-    elif tag_id:
-        tasks = tagsana.api.get_tag_tasks(tag_id)
+    try:
+        project_id = int(request.form['Project'])
+    except:
+        pass
     else:
-        print 'No context for searching for tags given!'
+        session['project_id'] = project_id
+        print 'Calling "get_project_tasks" API for project: %s...' % (project_id,)
+        tasks = tagsana.api.get_project_tasks(project_id)
+    try:
+        tag_id = int(request.form['Tag'])
+    except:
+        AssertionError('No context for searching for projects given!')
+    else:
+        session['tag_id'] = tag_id
+        print 'Calling "get_tag_tasks" API for tag: %s...' % (tag_id,)
+        tasks = tagsana.api.get_tag_tasks(tag_id)
     print 'API call returned tasks: %s' % (tasks,)
     for task in tasks:
-        try:
-            db.execute('INSERT OR REPLACE INTO task (id, name) VALUES (?, ?)',
-                        [task['id'], task['name']])
-            print 'addition of task: %s SUCCESSFUL' % task
-        except sqlite3.IntegrityError:
-            #Tag already in DB
-            print 'task: %s ALREADY IN DB' % task
-            pass
+        db.execute('INSERT OR REPLACE INTO task (id, name) VALUES (?, ?)',
+                    [task['id'], task['name']])
+        print 'addition of task: %s SUCCESSFUL' % task
+        db.commit()
+        if workspace_id:
+            db.execute('INSERT OR REPLACE INTO workspace_task (workspace_id, task_id) VALUES (?, ?)',
+                        [workspace_id, task['id']])
+        elif project_id:
+            db.execute('INSERT OR REPLACE INTO project_task (project_id, task_id) VALUES (?, ?)',
+                        [project_id, task['id']])
         else:
-            db.commit()
-        try:
-            if workspace_id:
-                db.execute('INSERT OR REPLACE INTO workspace_task (workspace_id, task_id) VALUES (?, ?)',
-                            [workspace_id, task['id']])
-            elif project_id:
-                db.execute('INSERT OR REPLACE INTO project_task (project_id, task_id) VALUES (?, ?)',
-                            [project_id, task['id']])
-            else:
-                db.execute('INSERT OR REPLACE INTO task_tag (task_id, tag_id) VALUES (?, ?)',
-                            [task['id'], tag_id])
-            print 'addition of task relationship: %s SUCCESSFUL' % task
-        except sqlite3.IntegrityError:
-            #Tag already in DB
-            print 'task relationship: %s ALREADY IN DB' % task
-            pass
-        else:
-            db.commit()
+            db.execute('INSERT OR REPLACE INTO task_tag (task_id, tag_id) VALUES (?, ?)',
+                        [task['id'], tag_id])
+        print 'addition of task relationship: %s SUCCESSFUL' % task
+        db.commit()
     return redirect(url_for('show_tasks'))
 
 @app.route('/tasks')
@@ -290,10 +258,10 @@ def get_projects():
     except:
         pass
     else:
-        print 'Calling "list_projects" API for workspace: %s...' % (workspace_id,)
         session['workspace_id'] = workspace_id
-        print 'Calling "get_project_tasks" API for projects: %s...' % (projects,)
+        print 'Calling "list_projects" API for workspace: %s...' % (workspace_id,)
         projects = tagsana.api.list_projects(workspace_id)
+        print 'Calling "get_project_tasks" API for projects: %s...' % (projects,)
 
     #Workflow for discovering projects when task is known
     try:
@@ -301,8 +269,8 @@ def get_projects():
     except:
         pass
     else:
-        print 'Calling "get_task" API for task: %s...' % (task_id,)
         session['task_id'] = task_id
+        print 'Calling "get_task" API for task: %s...' % (task_id,)
         projects = tagsana.api.get_task(task_id)['projects']
 
     #Workflow for discovering projects when tag is known
@@ -311,8 +279,8 @@ def get_projects():
     except:
         AssertionError('No context for searching for projects given!')
     else:
-        print 'Calling "get_tag_tasks" API for tag: %s...' % (tag_id,)
         session['tag_id'] = tag_id
+        print 'Calling "get_tag_tasks" API for tag: %s...' % (tag_id,)
         projects = []
         workspace_ids = [ws['id'] for ws in tagsana.api.list_workspaces()]
         projs = [p for el in [tagsana.api.list_projects(w) for w in workspace_ids] for p in chain(el)]
@@ -328,32 +296,21 @@ def get_projects():
     #Now that projects have been discovered, add them to the DB
     print 'API call returned projects: %s' % (projects,)
     for project in projects:
-        try:
-            db.execute('INSERT OR REPLACE INTO project (id, name) VALUES (?, ?)',
-                        [project['id'], project['name']])
-            print 'addition of project: %s SUCCESSFUL' % project
-        except sqlite3.IntegrityError:
-            print 'project: %s ALREADY IN DB' % project
-            pass
+        db.execute('INSERT OR REPLACE INTO project (id, name) VALUES (?, ?)',
+                    [project['id'], project['name']])
+        print 'addition of project: %s SUCCESSFUL' % project
+        db.commit()
+        if workspace_id:
+            db.execute('INSERT OR REPLACE INTO workspace_project (workspace_id, project_id) VALUES (?, ?)',
+                        [workspace_id, project['id']])
+        elif task_id:
+            db.execute('INSERT OR REPLACE INTO project_task (project_id, task_id) VALUES (?, ?)',
+                        [project['id'], task_id])
         else:
-            db.commit()
-        try:
-            if workspace_id:
-                db.execute('INSERT OR REPLACE INTO workspace_project (workspace_id, project_id) VALUES (?, ?)',
-                            [workspace_id, project['id']])
-            elif task_id:
-                db.execute('INSERT OR REPLACE INTO project_task (project_id, task_id) VALUES (?, ?)',
-                            [project['id'], task_id])
-            else:
-                db.execute('INSERT OR REPLACE INTO project_tag (project_id, tag_id) VALUES (?, ?)',
-                            [project['id'], tag_id])
-            print 'addition of project relationship: %s SUCCESSFUL' % project
-        except sqlite3.IntegrityError:
-            #Tag already in DB
-            print 'project relationship: %s ALREADY IN DB' % project
-            pass
-        else:
-            db.commit()
+            db.execute('INSERT OR REPLACE INTO project_tag (project_id, tag_id) VALUES (?, ?)',
+                        [project['id'], tag_id])
+        print 'addition of project relationship: %s SUCCESSFUL' % project
+        db.commit()
     return redirect(url_for('show_projects'))
 
 
@@ -470,109 +427,6 @@ def show_by_query_string():
         sql_srqs = create_sql_srqs(srqs, rt)
         sql_crqs = create_sql_crqs(crq_type, sql_srqs, rt, sql_crqs)
     sql_query = query_start + sql_crqs + ');'
-
-    #context = []
-    #ct = {}
-    #where_used = False
-    #tables = ''
-    #ands = ''
-    #valid_args = ['show','table_filters']
-    #request_args = request.args
-    #query = {key: request_args[key] for key in request_args.keys() if key in valid_args}
-    #if 'show' not in query.keys():
-    #    print 'ERROR: must have a "show" query string parameter'
-    #else:
-    #    qt = query['show']
-    #    sql_select = """SELECT %s.id, %s.name FROM %s""" % (qt, qt, qt)
-    #print 'tables: %s' % tables
-    #for delim in json.loads(query.get('table_filters',{})).keys():
-    #    print 'tables in delim loop: %s' % tables
-    #    print 'delims: %s' % json.loads(query.get('table_filters',{})).keys()
-    #    print "query: %s" % query
-    #    print "delim: %s" % delim
-    #    print "json.loads(query['table_filters']: %s" % query['table_filters']
-    #    print "json.loads(query['table_filters'])[delim]: %s" % json.loads(query['table_filters'])[delim]
-    #    for t in json.loads(query['table_filters'])[delim].keys():
-    #        print 'tables in tag loop: %s' % tables
-    #        ct = {}
-    #        if where_used:
-    #            ands += ' AND'
-    #        else:
-    #            ands += ' WHERE'
-    #            where_used = True
-    #        tables += ', %s' % (t,)
-    #        id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
-    #        id_len = [str(eid) for eid in json.loads(query['table_filters'])[delim][t]]
-    #        if is_subset(qt, t):
-    #            dt, st = t, qt
-    #        else:
-    #            dt, st = qt, t
-
-    #        tables += ', %s_%s' % (dt, st)
-    #        if delim == 'has_any':
-    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list)
-    #        elif delim == 'has_all':
-    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) >= %s' % (
-    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
-    #        elif delim == 'has_only':
-    #            ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s) GROUP BY %s_%s.%s_id HAVING count(%s_%s.%s_id) = %s' % (
-    #                      qt,     dt,st,qt,       dt,st, t,      t,        t,  id_list,          dt,st,qt,                dt,st,qt,len(id_len))
-    #        else:
-    #            print 'ERROR: delimiter not "has_any"/"has_all"/"has_only"'
-
-    #        ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
-    #        ct['type'] = t
-    #        ct['prep'] = 'in' if is_subset(qt, t) else 'for'
-    #        count = 0
-    #        boo = ''
-    #        for row in ct_cur.fetchall():
-    #            context.append({'type':t,'prep':'in' if is_subset(qt, t) else 'with','name':row['name']})
-        #ct = {}
-        #if where_used:
-        #    ands += ' AND'
-        #else:
-        #    ands += ' WHERE'
-        #    where_used = True
-        #tables += ', %s' % (t,)
-        #id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[delim][t]])
-        #if is_subset(qt, t):
-        #    tables += ', %s_%s' % (t, qt)
-        #    ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-        #              qt,      t,qt,qt,        t,qt, t,      t,        t,  id_list)
-        #else:
-        #    tables += ', %s_%s' % (qt, t)
-        #    ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-        #              qt,     qt, t,qt,       qt, t, t,      t,        t,  id_list)
-        #ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
-        #ct['type'] = t
-        #ct['prep'] = 'in' if is_subset(qt, t) else 'for'
-        #for row in ct_cur.fetchall():
-        #    ct['name'] = row['name']
-        #    context.append(ct)
-        #for t in json.loads(query.get('table_filters',{})).keys():
-        #    ct = {}
-        #    if where_used:
-        #        ands += ' AND'
-        #    else:
-        #        ands += ' WHERE'
-        #        where_used = True
-        #    tables += ', %s' % (t,)
-        #    id_list = ', '.join([str(eid) for eid in json.loads(query['table_filters'])[t]])
-        #    if is_subset(qt, t):
-        #        tables += ', %s_%s' % (t, qt)
-        #        ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-        #                qt,      t,qt,qt,        t,qt, t,      t,        t,  id_list)
-        #    else:
-        #        tables += ', %s_%s' % (qt, t)
-        #        ands += ' %s.id = %s_%s.%s_id AND %s_%s.%s_id = %s.id AND %s.id IN (%s)' % (
-        #                qt,     qt, t,qt,       qt, t, t,      t,        t,  id_list)
-        #    ct_cur = db.execute('SELECT name FROM %s WHERE %s.id IN (%s)' % (t, t, id_list))
-        #    ct['type'] = t
-        #    ct['prep'] = 'in' if is_subset(qt, t) else 'for'
-        #    for row in ct_cur.fetchall():
-        #        ct['name'] = row['name']
-        #        context.append(ct)
 
     #sql_query = sql_select + tables + ands
     print 'About to Query: %s' % sql_query
